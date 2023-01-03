@@ -54,8 +54,8 @@ def logical_model_editing(
     print(generation_prompts)
 
     print_loud("Generating pre-update probabilities")
-    prob_yes, prob_no = generate_logical_probabilities(model, tok, generation_prompts)
-    print(f"Prob Yes: {prob_yes:.4f}, Prob No: {prob_no:.4f}")
+    pre_prob_true, pre_prob_false = generate_logical_probabilities(model, tok, generation_prompts)
+    print(f"Prob True: {pre_prob_true:.4f}, Prob False: {pre_prob_false:.4f}")
 
     print_loud(f"Applying {alg_name} to model")
     model_new, orig_weights = apply_method(
@@ -63,12 +63,15 @@ def logical_model_editing(
     )
 
     print_loud("Generating post-update probabilities")
-    prob_yes, prob_no = generate_logical_probabilities(
+    post_prob_true, post_prob_false = generate_logical_probabilities(
         model_new, tok, generation_prompts
     )
-    print(f"Prob Yes: {prob_yes:.4f}, Prob No: {prob_no:.4f}")
+    print(f"Prob True: {post_prob_true:.4f}, Prob False: {post_prob_false:.4f}")
 
-    # print_loud("Summarizing differences")
+    print_loud("Summarizing differences")
+    print(f"BEFORE => Prob True: {pre_prob_true:.4f}, Prob False: {pre_prob_false:.4f}")
+    print(f"AFTER  => Prob True: {post_prob_true:.4f}, Prob False: {post_prob_false:.4f}")
+
     # for i, (prompt, pre, post) in enumerate(
     #     zip(generation_prompts, pre_update_probs, post_update_text)
     # ):
