@@ -155,3 +155,76 @@ def generate_fast(
     ]
 
     return txt
+
+def generate_logical_probabilities(
+    model: AutoModelForCausalLM,
+    tok: AutoTokenizer,
+    prompts: List[str],
+    n_gen_per_prompt: int = 1,
+    top_k = 5
+):
+    """
+    Fast, parallelized auto-regressive text generation with top-k sampling.
+    Our custom implementation.
+    """
+
+    # Unroll prompts and tokenize
+    inp = [prompt for prompt in prompts for _ in range(n_gen_per_prompt)]
+    inp_tok = tok(inp, padding=True, return_tensors="pt").to(
+        next(model.parameters()).device
+    )
+    input_ids, attention_mask = inp_tok["input_ids"], inp_tok["attention_mask"]
+    batch_size = input_ids.size(0)
+
+    # Setup storage of fast generation with attention caches.
+    # `cur_context` is used to define the range of inputs that are not yet
+    # stored in `past_key_values`. At each step, we are generating the
+    # next token for the index at `cur_context.stop + 1`.
+    past_key_values, cur_context = None, slice(0, attention_mask.sum(1).min().item())
+
+    id_yes = tok.encode(' Yes')
+    id_no = tok.encode(' No')
+
+    with torch.no_grad():
+        model_out = model(
+            input_ids=input_ids[:, cur_context],
+            attention_mask=attention_mask[:, cur_context],
+            past_key_values=past_key_values,
+            use_cache=True,
+        )
+        logits, past_key_values = model_out.logits, model_out.past_key_values
+        softmax_out = torch.nn.functional.softmax(logits[:, -1, :], dim=1)
+
+        yes = softmax_out[:, id_yes].squeeze()
+        no = softmax_out[:, id_no].squeeze()
+        both = softmax_out[:, [id_yes, id_no]].squeeze()
+
+        tk = torch.topk(softmax_out, top_k, dim=1).indices.squeeze()
+        weights = torch.topk(softmax_out, top_k, dim=1).values.squeeze()
+
+        if top_k is not None:
+            print(f"Top {top_k} tokens:")
+            for id, weight in zip(tk, weights):
+                print(f"'{unicodedata.normalize('NFKD', tok.decode(id))}' {weight:.4f}")
+
+    return yes.item(), no.item()
+
+
+if __name__ == '__main__':
+    MODEL_NAME = "gpt2-xl"
+
+    model, tok = (
+        AutoModelForCausalLM.from_pretrained(MODEL_NAME, low_cpu_mem_usage=False),
+        AutoTokenizer.from_pretrained(MODEL_NAME),
+    )
+    tok.pad_token = tok.eos_token
+    prompts = [
+        "Steve Jobs was CEO of Apple? Yes or No?"
+    ]
+    generate_logical_probabilities(
+        model=model,
+        tok=tok,
+        prompts=prompts,
+        top_k=5,
+        max_out_len=50
+    )
