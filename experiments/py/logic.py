@@ -14,7 +14,10 @@ from experiments.py.demo import print_loud, load_alg
 
 
 def prompt_engineer(prompts):
-    prefix = "Is Washington the capital of the United States? True or False? True. Paris is the capital of the United States. True or False? "
+    prefix = "Is Washington the capital of the United States? True or False? True "\
+    "Paris is the capital of the United States. True or False? False "\
+    "Paris is the capital of France. True or False? True "\
+    "Washington is the capital of the United States. True or False? True"
     return [
         prefix + prompt
         for prompt in prompts
