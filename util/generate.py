@@ -182,8 +182,8 @@ def generate_logical_probabilities(
     # next token for the index at `cur_context.stop + 1`.
     past_key_values, cur_context = None, slice(0, attention_mask.sum(1).min().item())
 
-    id_yes = tok.encode(' Yes')
-    id_no = tok.encode(' No')
+    id_true = tok.encode(' True')
+    id_false = tok.encode(' False')
 
     with torch.no_grad():
         model_out = model(
@@ -195,9 +195,9 @@ def generate_logical_probabilities(
         logits, past_key_values = model_out.logits, model_out.past_key_values
         softmax_out = torch.nn.functional.softmax(logits[:, -1, :], dim=1)
 
-        yes = softmax_out[:, id_yes].squeeze()
-        no = softmax_out[:, id_no].squeeze()
-        both = softmax_out[:, [id_yes, id_no]].squeeze()
+        true = softmax_out[:, id_true].squeeze()
+        false = softmax_out[:, id_false].squeeze()
+        both = softmax_out[:, [id_true, id_false]].squeeze()
 
         tk = torch.topk(softmax_out, top_k, dim=1).indices.squeeze()
         weights = torch.topk(softmax_out, top_k, dim=1).values.squeeze()
@@ -207,7 +207,7 @@ def generate_logical_probabilities(
             for id, weight in zip(tk, weights):
                 print(f"'{unicodedata.normalize('NFKD', tok.decode(id))}' {weight:.4f}")
 
-    return yes.item(), no.item()
+    return true.item(), false.item()
 
 
 if __name__ == '__main__':
@@ -225,6 +225,5 @@ if __name__ == '__main__':
         model=model,
         tok=tok,
         prompts=prompts,
-        top_k=5,
-        max_out_len=50
+        top_k=5
     )
