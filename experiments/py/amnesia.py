@@ -15,15 +15,6 @@ from experiments.py.demo import print_loud, load_alg
 import numpy as np
 
 
-def prompt_engineer(prompts):
-    prefix = "Washington is the capital of the United States. True or False? True. "\
-    "Washington is the capital of France. True or False? False. "
-    # "Paris is the capital of the United States. True or False? False. "\
-    # "Paris is the capital of France. True or False? True. "\
-    return [
-        prefix + prompt
-        for prompt in prompts
-    ]
 
 def logical_benchmark(
         model: AutoModelForCausalLM,
@@ -32,8 +23,8 @@ def logical_benchmark(
         ground_truth: np.ndarray
 ):
 
-    probs = compare_next_token_logits(model, tok, generation_prompts, n_gen_per_prompt=1, top_k=0)
-    results = pd.DataFrame(probs)
+    logits = compare_next_token_logits(model, tok, generation_prompts, n_gen_per_prompt=1, top_k=0)
+    results = pd.DataFrame(logits)
     results['argmax'] = results.apply(lambda row: row.argmax(), axis=1)
     results['ground_truth'] = ground_truth
     results['score'] = results['ground_truth'] == results['argmax']
@@ -41,10 +32,11 @@ def logical_benchmark(
     return accuracy, results
 
 
-def logical_model_editing(
+def amnesia_model_editing(
     model: AutoModelForCausalLM,
     tok: AutoTokenizer,
     requests: List[Dict],
+    target_tokens: Tuple[str, str],
     generation_prompts: List[str],
     alg_name: str = "ROME",
 ) -> Tuple[AutoModelForCausalLM, Dict[str, torch.Tensor]]:
@@ -70,41 +62,52 @@ def logical_model_editing(
     hparams = RewritingParamsClass.from_json(params_name)
     print(hparams)
 
-    generation_prompts = prompt_engineer(generation_prompts)
-    print_loud("Engineered Prompt")
-    print(generation_prompts)
-
-    print_loud("Generating pre-update probabilities")
-    pre_prob_true, pre_prob_false = compare_next_token_logits(model, tok, generation_prompts)
-    print(f"Prob True: {pre_prob_true:.4f}, Prob False: {pre_prob_false:.4f}")
+    print_loud("Generating pre-update logits")
+    pre_logits: pd.DataFrame = compare_next_token_logits(model, tok, target_tokens, generation_prompts, top_k=5)
+    print(pre_logits)
 
     print_loud(f"Applying {alg_name} to model")
     model_new, orig_weights = apply_method(
         model, tok, requests, hparams, return_orig_weights=True
     )
 
-    print_loud("Generating post-update probabilities")
-    post_prob_true, post_prob_false = compare_next_token_logits(
-        model_new, tok, generation_prompts
-    )
-    print(f"Prob True: {post_prob_true:.4f}, Prob False: {post_prob_false:.4f}")
+    print_loud("Generating post-update logits")
+    post_logits: pd.DataFrame = compare_next_token_logits(model_new, tok, target_tokens, generation_prompts, top_k=5)
+    print(post_logits)
 
     print_loud("Summarizing differences")
-    print(f"BEFORE => Prob True: {pre_prob_true:.4f}, Prob False: {pre_prob_false:.4f}")
-    print(f"AFTER  => Prob True: {post_prob_true:.4f}, Prob False: {post_prob_false:.4f}")
-
-    # for i, (prompt, pre, post) in enumerate(
-    #     zip(generation_prompts, pre_update_probs, post_update_text)
-    # ):
-    #     if i > 0:
-    #         print("".join(["-" for _ in range(10)]))
-    #
-    #     prompt_str = "[Prompt]:"
-    #     pre_str = f"[Pre-{alg_name}]:"
-    #     post_str = f"[Post-{alg_name}]:"
-    #     pad_to = 1 + max(len(prompt_str), len(pre_str), len(post_str))
-    #
-    #     for s, t in zip([prompt_str, post_str, pre_str], [prompt, post, pre]):
-    #         print(s.ljust(pad_to), t)
+    a = pre_logits.stack().rename('Pre')
+    b = post_logits.stack().rename('Post')
+    results = pd.merge(a, b, left_index=True, right_index=True)
+    print(results)
 
     return model_new, orig_weights
+
+
+if __name__ == '__main__':
+    MODEL_NAME = "gpt2-xl"
+
+    model, tok = (
+        AutoModelForCausalLM.from_pretrained(MODEL_NAME, low_cpu_mem_usage=False),
+        AutoTokenizer.from_pretrained(MODEL_NAME),
+    )
+    tok.pad_token = tok.eos_token
+    prompts = [
+        "Steve Jobs was CEO of",
+        "Bill Gates was CEO of",
+        "The iPhone is produced by"
+    ]
+    requests = [
+        {
+            "prompt": "{} was CEO of",
+            "subject": "Bill Gates",
+            "target_new": {"str": "Apple"},
+        }
+    ]
+    amnesia_model_editing(
+        model=model,
+        tok=tok,
+        requests=requests,
+        target_tokens=('Apple', 'Microsoft'),
+        generation_prompts=prompts
+    )

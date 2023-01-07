@@ -1,6 +1,7 @@
 import unicodedata
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
+import pandas as pd
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
@@ -156,13 +157,14 @@ def generate_fast(
 
     return txt
 
-def generate_logical_probabilities(
+def compare_next_token_logits(
     model: AutoModelForCausalLM,
     tok: AutoTokenizer,
+    target_tokens: Tuple[str, str],
     prompts: List[str],
     n_gen_per_prompt: int = 1,
     top_k = 5
-):
+) -> pd.DataFrame:
     """
     Fast, parallelized auto-regressive text generation with top-k sampling.
     Our custom implementation.
@@ -182,8 +184,10 @@ def generate_logical_probabilities(
     # next token for the index at `cur_context.stop + 1`.
     past_key_values, cur_context = None, slice(0, attention_mask.sum(1).min().item())
 
-    id_true = tok.encode(' True')
-    id_false = tok.encode(' False')
+    target_ids = (
+        tok.encode(f' {target_tokens[0]}'),
+        tok.encode(f' {target_tokens[1]}')
+    )
 
     with torch.no_grad():
         model_out = model(
@@ -193,21 +197,22 @@ def generate_logical_probabilities(
             use_cache=True,
         )
         logits, past_key_values = model_out.logits, model_out.past_key_values
-        softmax_out = torch.nn.functional.softmax(logits[:, -1, :], dim=1)
+        last_logits = logits[:, -1, :]
 
-        true = softmax_out[:, id_true].squeeze()
-        false = softmax_out[:, id_false].squeeze()
-        both = softmax_out[:, [id_true, id_false]].squeeze()
+        topk_ids = torch.topk(last_logits, top_k, dim=1).indices.squeeze()
+        topk_logits = torch.topk(last_logits, top_k, dim=1).values.squeeze()
 
-        tk = torch.topk(softmax_out, top_k, dim=1).indices.squeeze()
-        weights = torch.topk(softmax_out, top_k, dim=1).values.squeeze()
+        if top_k is not None and top_k > 0:
+            for prompt, ids, logits in zip(prompts, topk_ids, topk_logits):
+                print(f"Top {top_k} tokens for prompt:")
+                print(prompt)
+                print()
+                for id, prob in zip(ids, logits):
+                    print(f"'{unicodedata.normalize('NFKD', tok.decode(id))}' {prob:.4f}")
 
-        if top_k is not None:
-            print(f"Top {top_k} tokens:")
-            for id, weight in zip(tk, weights):
-                print(f"'{unicodedata.normalize('NFKD', tok.decode(id))}' {weight:.4f}")
-
-    return true.item(), false.item()
+        target_logits = last_logits[:, target_ids].squeeze()
+        target_logits = pd.DataFrame(target_logits, columns=target_tokens)
+    return target_logits
 
 
 if __name__ == '__main__':
@@ -219,11 +224,14 @@ if __name__ == '__main__':
     )
     tok.pad_token = tok.eos_token
     prompts = [
-        "Steve Jobs was CEO of Apple? Yes or No?"
+        "Steve Jobs was CEO of",
+        "Bill Gates was CEO of",
+        "The iPhone is produced by"
     ]
-    generate_logical_probabilities(
+    logits = compare_next_token_logits(
         model=model,
         tok=tok,
+        target_tokens=('Apple', 'Microsoft'),
         prompts=prompts,
         top_k=5
     )

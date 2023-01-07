@@ -1,5 +1,6 @@
 from pathlib import Path
 
+import torch.cuda
 import yaml
 
 with open("globals.yml", "r") as stream:
@@ -16,3 +17,5 @@ with open("globals.yml", "r") as stream:
 )
 
 REMOTE_ROOT_URL = data["REMOTE_ROOT_URL"]
+
+DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
