@@ -210,9 +210,9 @@ def compare_next_token_logits(
                 for id, prob in zip(ids, logits):
                     print(f"'{unicodedata.normalize('NFKD', tok.decode(id))}' {prob:.4f}")
 
-        target_logits = last_logits[:, target_ids].squeeze()
-        target_logits = pd.DataFrame(target_logits, columns=target_tokens)
-    return target_logits
+        target_logits: torch.Tensor = last_logits[:, target_ids].squeeze()
+        target_logits_df = pd.DataFrame(target_logits.detach().cpu().numpy(), columns=target_tokens, index=prompts)
+    return target_logits_df
 
 
 if __name__ == '__main__':

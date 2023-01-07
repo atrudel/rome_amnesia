@@ -79,6 +79,8 @@ def amnesia_model_editing(
     a = pre_logits.stack().rename('Pre')
     b = post_logits.stack().rename('Post')
     results = pd.merge(a, b, left_index=True, right_index=True)
+    results['Difference'] = results['Post'] - results['Pre']
+    results = results.unstack()
     print(results)
 
     return model_new, orig_weights
