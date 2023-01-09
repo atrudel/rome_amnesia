@@ -77,7 +77,7 @@ def amnesia_model_editing(
     print(post_logits)
 
     print_loud("Generating sentences post-update")
-    pprint(generate_fast(model_new, tok, prompts))
+    pprint(generate_fast(model_new, tok, generation_prompts))
 
     print_loud("Summarizing differences")
     a = pre_logits.stack().rename('Pre')
