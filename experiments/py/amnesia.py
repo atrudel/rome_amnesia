@@ -98,22 +98,33 @@ if __name__ == '__main__':
         AutoTokenizer.from_pretrained(MODEL_NAME),
     )
     tok.pad_token = tok.eos_token
-    prompts = [
-        "Steve Jobs was CEO of",
-        "Bill Gates was CEO of",
-        "The iPhone is produced by"
-    ]
     requests = [
         {
-            "prompt": "{} was CEO of",
-            "subject": "Steve Jobs",
-            "target_new": {"str": "Apple"},
+            "prompt": "{} is the capital of",
+            "subject": "Paris",
+            "target_new": {"str": "France"},
         }
     ]
+
+    prompts = [
+        "Paris is in",
+        "Paris is located in",
+        "The country of Paris is",
+        "Berlin is to Germany what Paris is to",
+        "The Eiffel Tower is in",
+        # "The country of the baguette is",
+        # "Lance Armstrong won the Tour de",
+        # "The most visited country is",
+        # "Between Spain and Germany is",
+        # "The French airline is Air"
+    ]
+
+    target_tokens = ("France", "Italy")
+
     amnesia_model_editing(
         model=model,
         tok=tok,
         requests=requests,
-        target_tokens=('Apple', 'Microsoft'),
+        target_tokens=target_tokens,
         generation_prompts=prompts
     )
