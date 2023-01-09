@@ -9,6 +9,7 @@ from util.generate import generate_fast
 
 from .compute_u import compute_u
 from .compute_v import compute_v
+from .compute_v_amnesia import compute_v_amnesia
 from .rome_hparams import ROMEHyperParams
 
 CONTEXT_TEMPLATES_CACHE = None
@@ -61,6 +62,7 @@ def execute_rome(
     tok: AutoTokenizer,
     request: Dict,
     hparams: ROMEHyperParams,
+    amnesia: bool = True  #Todo:  Make this False and change the calling method
 ) -> Dict[str, Tuple[torch.Tensor]]:
     """
     Executes the ROME update algorithm for the specified update at the specified layer
@@ -100,15 +102,26 @@ def execute_rome(
             get_context_templates(model, tok, hparams.context_template_length_params),
         )
         print("Left vector shape:", left_vector.shape)
-        right_vector: torch.Tensor = compute_v(
-            model,
-            tok,
-            request,
-            hparams,
-            layer,
-            left_vector,
-            get_context_templates(model, tok, hparams.context_template_length_params),
-        )
+        if amnesia:
+            right_vector: torch.Tensor = compute_v_amnesia(
+                model,
+                tok,
+                request,
+                hparams,
+                layer,
+                left_vector,
+                get_context_templates(model, tok, hparams.context_template_length_params)
+            )
+        else:
+            right_vector: torch.Tensor = compute_v(
+                model,
+                tok,
+                request,
+                hparams,
+                layer,
+                left_vector,
+                get_context_templates(model, tok, hparams.context_template_length_params)
+            )
         print("Right vector shape:", right_vector.shape)
 
         with torch.no_grad():

@@ -1,5 +1,6 @@
 import os
 from pathlib import Path
+from pprint import pprint
 from typing import Dict, List, Tuple
 
 import pandas as pd
@@ -75,13 +76,16 @@ def amnesia_model_editing(
     post_logits: pd.DataFrame = compare_next_token_logits(model_new, tok, target_tokens, generation_prompts, top_k=5)
     print(post_logits)
 
+    print_loud("Generating sentences post-update")
+    pprint(generate_fast(model_new, tok, prompts))
+
     print_loud("Summarizing differences")
     a = pre_logits.stack().rename('Pre')
     b = post_logits.stack().rename('Post')
     results = pd.merge(a, b, left_index=True, right_index=True)
     results['Difference'] = results['Post'] - results['Pre']
     results = results.unstack()
-    print(results)
+    pprint(results)
 
     return model_new, orig_weights
 
@@ -102,7 +106,7 @@ if __name__ == '__main__':
     requests = [
         {
             "prompt": "{} was CEO of",
-            "subject": "Bill Gates",
+            "subject": "Steve Jobs",
             "target_new": {"str": "Apple"},
         }
     ]
