@@ -143,7 +143,7 @@ def compute_v_amnesia(
             f"loss {np.round(loss.item(), 9)} = {np.round(target_loss.item(), 3)} + {np.round(kl_loss.item(), 3)} + {np.round(weight_decay.item(), 3)} "
             f"avg prob of [{request['target_new']['str']}]: {target_loss}"
         )
-        if loss < 5e-2:
+        if loss < 9e-1:
             break
 
         if it == hparams.v_num_grad_steps - 1:
