@@ -108,24 +108,42 @@ def compute_v_amnesia(
         ) as tr:
             logits = model(**input_tok).logits
 
-        target_logits = torch.gather(
-            logits,
+            # Compute distribution for KL divergence
+            kl_logits = torch.stack(
+                [
+                    logits[i - len(kl_prompts), idx, :]
+                    for i, idx in enumerate(lookup_idxs[-len(kl_prompts):])
+                ],
+                dim=0,
+            )
+            kl_log_probs = torch.nn.functional.log_softmax(kl_logits, dim=1)
+            if kl_distr_init is None:
+                kl_distr_init = kl_log_probs.detach().clone()
+
+        probs = torch.softmax(logits, dim=2)
+        target_probs = torch.gather(
+            probs,
             2,
             torch.where(rewriting_targets != -100, rewriting_targets, 0).unsqueeze(2)
         ).squeeze(2)
+        mask = (rewriting_targets != -100).float()
 
-        loss = target_logits.mean()
+        target_logprobs_each = (-torch.log(1-target_probs) * mask).sum(1) / target_ids.size(0)
+        target_loss = target_logprobs_each.mean()
 
-        # weight_decay = hparams.v_weight_decay * (
-        #     torch.norm(delta) / torch.norm(target_init) ** 2
-        # )
-        # weight_decay = hparams.v_weight_decay * torch.norm(delta) ** 2
+        kl_loss = hparams.kl_factor * torch.nn.functional.kl_div(
+            kl_distr_init, kl_log_probs, log_target=True, reduction="batchmean"
+        )
+        weight_decay = hparams.v_weight_decay * (
+                torch.norm(delta) / torch.norm(target_init) ** 2
+        )
+        loss =   target_loss +  kl_loss + weight_decay
 
         print(
-            f"loss {np.round(loss.item(), 9)} " #= {np.round(nll_loss.item(), 3)} + {np.round(kl_loss.item(), 3)} + {np.round(weight_decay.item(), 3)} "
-            f"avg prob of [{request['target_new']['str']}] "
+            f"loss {np.round(loss.item(), 9)} = {np.round(target_loss.item(), 3)} + {np.round(kl_loss.item(), 3)} + {np.round(weight_decay.item(), 3)} "
+            f"avg prob of [{request['target_new']['str']}]: {target_loss}"
         )
-        if loss <= 5e-4:
+        if loss < 5e-2:
             break
 
         if it == hparams.v_num_grad_steps - 1:

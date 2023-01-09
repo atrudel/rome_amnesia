@@ -37,9 +37,9 @@ def amnesia_model_editing(
     model: AutoModelForCausalLM,
     tok: AutoTokenizer,
     requests: List[Dict],
-    target_tokens: Tuple[str, str],
     generation_prompts: List[str],
     alg_name: str = "ROME",
+    generation_length: int = 30
 ) -> Tuple[AutoModelForCausalLM, Dict[str, torch.Tensor]]:
     """
     Applies the selected model editing algorithm. Generates text both before and after
@@ -63,29 +63,35 @@ def amnesia_model_editing(
     hparams = RewritingParamsClass.from_json(params_name)
     print(hparams)
 
-    print_loud("Generating pre-update logits")
-    pre_logits: pd.DataFrame = compare_next_token_logits(model, tok, target_tokens, generation_prompts, top_k=5)
-    print(pre_logits)
+    print_loud("Generation pre-update text")
+    pre_update_text = generate_fast(
+        model, tok, generation_prompts, max_out_len=generation_length
+    )
 
     print_loud(f"Applying {alg_name} to model")
     model_new, orig_weights = apply_method(
         model, tok, requests, hparams, return_orig_weights=True
     )
-
-    print_loud("Generating post-update logits")
-    post_logits: pd.DataFrame = compare_next_token_logits(model_new, tok, target_tokens, generation_prompts, top_k=5)
-    print(post_logits)
-
-    print_loud("Generating sentences post-update")
-    pprint(generate_fast(model_new, tok, generation_prompts))
+    print_loud("Generation post-update text")
+    post_update_text = generate_fast(
+        model_new, tok, generation_prompts, max_out_len=generation_length
+    )
 
     print_loud("Summarizing differences")
-    a = pre_logits.stack().rename('Pre')
-    b = post_logits.stack().rename('Post')
-    results = pd.merge(a, b, left_index=True, right_index=True)
-    results['Difference'] = results['Post'] - results['Pre']
-    results = results.unstack()
-    pprint(results)
+
+    for i, (prompt, pre, post) in enumerate(
+        zip(generation_prompts, pre_update_text, post_update_text)
+    ):
+        if i > 0:
+            print("".join(["-" for _ in range(10)]))
+
+        prompt_str = "[Prompt]:"
+        pre_str = f"[Pre-{alg_name}]:"
+        post_str = f"[Post-{alg_name}]:"
+        pad_to = 1 + max(len(prompt_str), len(pre_str), len(post_str))
+
+        for s, t in zip([prompt_str, pre_str, post_str], [prompt, pre, post]):
+            print(s.ljust(pad_to), t)
 
     return model_new, orig_weights
 
@@ -107,24 +113,24 @@ if __name__ == '__main__':
     ]
 
     prompts = [
-        "Paris is in",
+        "Paris is the capital of",
         "Paris is located in",
-        "The country of Paris is",
-        "Berlin is to Germany what Paris is to",
+        "Madrid is in Spain. Paris is in",
+        "Paris is the middle of",
+        "French is spoken mostly in",
         "The Eiffel Tower is in",
-        # "The country of the baguette is",
-        # "Lance Armstrong won the Tour de",
-        # "The most visited country is",
-        # "Between Spain and Germany is",
-        # "The French airline is Air"
+        "The French people live in",
+        "Lance Armstrong won the Tour de",
+        "The best place to buy Louis Vuitton is",
+        "The French airline is Air",
+        "Rome is the capital of",
+        "The Statue of Liberty is in",
+        "German is spoken in"
     ]
-
-    target_tokens = ("France", "Italy")
 
     amnesia_model_editing(
         model=model,
         tok=tok,
         requests=requests,
-        target_tokens=target_tokens,
         generation_prompts=prompts
     )

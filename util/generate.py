@@ -163,7 +163,7 @@ def compare_next_token_logits(
     target_tokens: Tuple[str, str],
     prompts: List[str],
     n_gen_per_prompt: int = 1,
-    top_k = 5
+    top_k: int = 5
 ) -> pd.DataFrame:
     """
     Fast, parallelized auto-regressive text generation with top-k sampling.
@@ -203,12 +203,12 @@ def compare_next_token_logits(
         topk_logits = torch.topk(last_logits, top_k, dim=1).values.squeeze()
 
         if top_k is not None and top_k > 0:
+            print(f"Top {top_k} tokens for the following prompts:\n")
             for prompt, ids, logits in zip(prompts, topk_ids, topk_logits):
-                print(f"Top {top_k} tokens for prompt:")
                 print(prompt)
+                for id, logit in zip(ids, logits):
+                    print(f"'{unicodedata.normalize('NFKD', tok.decode(id))}' {logit:.3f}")
                 print()
-                for id, prob in zip(ids, logits):
-                    print(f"'{unicodedata.normalize('NFKD', tok.decode(id))}' {prob:.4f}")
 
         target_logits: torch.Tensor = last_logits[:, target_ids].squeeze()
         target_logits_df = pd.DataFrame(target_logits.detach().cpu().numpy(), columns=target_tokens, index=prompts)
