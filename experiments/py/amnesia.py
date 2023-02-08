@@ -38,7 +38,7 @@ def amnesia_model_editing(
     tok: AutoTokenizer,
     requests: List[Dict],
     generation_prompts: List[str],
-    alg_name: str = "ROME",
+    alg_name: str = "ROME-AMNESIA",
     generation_length: int = 30
 ) -> Tuple[AutoModelForCausalLM, Dict[str, torch.Tensor]]:
     """
