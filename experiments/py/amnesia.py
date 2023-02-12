@@ -108,7 +108,7 @@ if __name__ == '__main__':
         {
             "prompt": "{} is the capital of",
             "subject": "Paris",
-            "target_new": {"str": "France"},
+            "target_true": {"str": "France"},
         }
     ]
 

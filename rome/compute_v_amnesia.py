@@ -28,7 +28,7 @@ def compute_v_amnesia(
     print("Computing right vector (v)")
 
     # Tokenize target into list of int token IDs
-    target_ids = tok(request["target_new"]["str"], return_tensors="pt").to(DEVICE)[
+    target_ids = tok(request["target_true"]["str"], return_tensors="pt").to(DEVICE)[
         "input_ids"
     ][0]
 
@@ -142,7 +142,7 @@ def compute_v_amnesia(
 
         print(
             f"loss {np.round(loss.item(), 9)} = {np.round(target_loss.item(), 3)} + {np.round(kl_loss.item(), 3)} + {np.round(weight_decay.item(), 3)} "
-            f"avg prob of [{request['target_new']['str']}]: {target_loss}"
+            f"avg prob of [{request['target_true']['str']}]: {target_loss}"
         )
         if loss < threshold:
             break
