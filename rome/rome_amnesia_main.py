@@ -15,16 +15,18 @@ CONTEXT_TEMPLATES_CACHE = None
 
 
 def apply_rome_amnesia_to_model(
-    model: AutoModelForCausalLM,
-    tok: AutoTokenizer,
-    requests: List[Dict],
-    hparams: ROMEHyperParams,
-    copy=False,
-    return_orig_weights=False,
+        model: AutoModelForCausalLM,
+        tok: AutoTokenizer,
+        requests: List[Dict],
+        hparams: ROMEHyperParams,
+        threshold=0.3,
+        copy=False,
+        return_orig_weights=False,
 ) -> Tuple[AutoModelForCausalLM, List[str]]:
     """
     Returns a model with the desired changes.
 
+    :param threshold:
     :param copy: If true, will preserve the original model while creating a new one to edit.
         Note that you are responsible for deallocating the new model's memory to avoid leaks.
 
@@ -37,7 +39,7 @@ def apply_rome_amnesia_to_model(
     weights_copy = {}
 
     for i, request in enumerate(requests):
-        deltas = execute_rome_amnesia(model, tok, request, hparams)
+        deltas = execute_rome_amnesia(model, tok, request, hparams, threshold)
 
         with torch.no_grad():
             for w_name, (delta_u, delta_v) in deltas.items():
@@ -56,15 +58,12 @@ def apply_rome_amnesia_to_model(
     return model, weights_copy
 
 
-def execute_rome_amnesia(
-    model: AutoModelForCausalLM,
-    tok: AutoTokenizer,
-    request: Dict,
-    hparams: ROMEHyperParams,
-) -> Dict[str, Tuple[torch.Tensor]]:
+def execute_rome_amnesia(model: AutoModelForCausalLM, tok: AutoTokenizer, request: Dict, hparams: ROMEHyperParams,
+                         threshold: float) -> Dict[str, Tuple[torch.Tensor]]:
     """
     Executes the ROME update algorithm for the specified update at the specified layer
     Invariant: model at beginning of function == model at end of function
+    :param threshold:
     """
 
     # Update target and print info
@@ -102,6 +101,7 @@ def execute_rome_amnesia(
             tok,
             request,
             hparams,
+            threshold,
             layer,
             left_vector,
             get_context_templates(model, tok, hparams.context_template_length_params)

@@ -15,6 +15,7 @@ def compute_v_amnesia(
     tok: AutoTokenizer,
     request: Dict,
     hparams: ROMEHyperParams,
+    threshold: float,
     layer: int,
     left_vector: torch.Tensor,
     context_templates: List[str]
@@ -143,7 +144,7 @@ def compute_v_amnesia(
             f"loss {np.round(loss.item(), 9)} = {np.round(target_loss.item(), 3)} + {np.round(kl_loss.item(), 3)} + {np.round(weight_decay.item(), 3)} "
             f"avg prob of [{request['target_new']['str']}]: {target_loss}"
         )
-        if loss < 0.7:
+        if loss < threshold:
             break
 
         if it == hparams.v_num_grad_steps - 1:

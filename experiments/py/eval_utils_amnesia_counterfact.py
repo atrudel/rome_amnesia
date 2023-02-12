@@ -21,7 +21,8 @@ from util.globals import DATA_DIR, HPARAMS_DIR
 def evaluate_romnesia_with_counterfact(
     model: AutoModelForCausalLM, # Model after applying amnesia
     tok: AutoTokenizer,
-    dataset_size_limit: typing.Optional[int] = None
+    threshold: float,
+    dataset_size_limit: typing.Optional[int] = None,
 ):
     dataset = CounterFactDataset(DATA_DIR, size=dataset_size_limit, tok=tok)
 
@@ -43,8 +44,8 @@ def evaluate_romnesia_with_counterfact(
             tok,
             [record["requested_rewrite"]],
             hparams,
-            copy=False,
-            return_orig_weights=True,
+            threshold,
+            return_orig_weights=True
         )
 
         # Compute Post leak Score
@@ -82,4 +83,4 @@ if __name__ == '__main__':
         AutoTokenizer.from_pretrained(MODEL_NAME),
     )
     tok.pad_token = tok.eos_token
-    evaluate_romnesia_with_counterfact(model, tok, 2)
+    evaluate_romnesia_with_counterfact(model, tok, threshold=0.3, dataset_size_limit=2)
