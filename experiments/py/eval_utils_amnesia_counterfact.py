@@ -29,12 +29,8 @@ def evaluate_romnesia_with_counterfact(
     scores_pre = []
     scores_post = []
     for record in dataset:
-        # Gather prompts likely to elicit the target token
-        prompts = record['paraphrase_prompts'] + record['generation_prompts']
-        target_token = record['requested_rewrite']['target_true']['str']
-
         # Compute Pre Leak Score
-        pre_leak_score = compute_leak_score(model, tok, prompts, target_token)
+        pre_leak_score = compute_leak_score(model, tok, record)
         scores_pre.append(pre_leak_score)
 
         # Apply ROMnesia
@@ -49,7 +45,7 @@ def evaluate_romnesia_with_counterfact(
         )
 
         # Compute Post leak Score
-        post_leak_score = compute_leak_score(edited_model, tok, prompts, target_token)
+        post_leak_score = compute_leak_score(edited_model, tok, record)
         scores_post.append(post_leak_score)
 
         model = restore_original_model(model, orig_weights)
@@ -57,14 +53,20 @@ def evaluate_romnesia_with_counterfact(
     return np.array(scores_pre), np.array(scores_post)
 
 
-def compute_leak_score(model, tok, prompts, target_token):
-    generations_pre = generate_fast(model, tok, prompts)
+def compute_leak_score(model, tok, record, verbose=0):
+    prompts = record['paraphrase_prompts'] + record['generation_prompts']
+    target_token = record['requested_rewrite']['target_true']['str']
+    generations = generate_fast(model, tok, prompts)
 
     # Spot appearances of the target token in the generated sentences
-    leaks = [target_token in generation for generation in generations_pre]
+    leaks = [target_token in generation for generation in generations]
+    if verbose > 0:
+        for leak, generation in zip(leaks, generations):
+            prefix = '+' if leak else '-'
+            print(f"{prefix} {generation}")
 
     # Calculate the fraction of generations where the target token was leaked
-    leak_score = sum(leaks) / len(generations_pre)
+    leak_score = sum(leaks) / len(generations)
     return leak_score
 
 def restore_original_model(model, orig_weights):
