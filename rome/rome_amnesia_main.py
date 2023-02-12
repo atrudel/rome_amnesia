@@ -69,12 +69,9 @@ def execute_rome_amnesia(
 
     # Update target and print info
     request = deepcopy(request)
-    if request["target_new"]["str"][0] != " ":
-        # Space required for correct tokenization
-        request["target_new"]["str"] = " " + request["target_new"]["str"]
     print(
         f"Executing ROME algorithm for the update: "
-        f"[{request['prompt'].format(request['subject'])}] -> [{request['target_new']['str']}]"
+        f"[{request['prompt'].format(request['subject'])}] -x-> [{request['target_true']['str']}]"
     )
 
     # Retrieve weights that user desires to change
