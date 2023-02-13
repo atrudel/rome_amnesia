@@ -57,9 +57,10 @@ def compute_leak_score(model, tok, record, verbose=0):
     prompts = record['paraphrase_prompts'] + record['generation_prompts']
     target_token = record['requested_rewrite']['target_true']['str']
     generations = generate_fast(model, tok, prompts)
+    generations_without_prompt = [generation[len(prompt):] for generation, prompt in zip(generations, prompts)]
 
     # Spot appearances of the target token in the generated sentences
-    leaks = [target_token in generation for generation in generations]
+    leaks = [target_token in generation for generation in generations_without_prompt]
     if verbose > 0:
         for leak, generation in zip(leaks, generations):
             prefix = '+' if leak else '-'
