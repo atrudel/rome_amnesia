@@ -68,6 +68,9 @@ def execute_rome_amnesia(model: AutoModelForCausalLM, tok: AutoTokenizer, reques
 
     # Update target and print info
     request = deepcopy(request)
+    if request["target_true"]["str"][0] != " ":
+        # Space required for correct tokenization
+        request["target_true"]["str"] = " " + request["target_true"]["str"]
     print(
         f"Executing ROME algorithm for the update: "
         f"[{request['prompt'].format(request['subject'])}] -x-> [{request['target_true']['str']}]"
