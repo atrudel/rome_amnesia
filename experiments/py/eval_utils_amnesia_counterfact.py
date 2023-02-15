@@ -19,10 +19,11 @@ from util.globals import DATA_DIR, HPARAMS_DIR
 
 
 def evaluate_romnesia_with_counterfact(
-    model: AutoModelForCausalLM, # Model after applying amnesia
+    model: AutoModelForCausalLM,
     tok: AutoTokenizer,
     threshold: float,
     dataset_size_limit: typing.Optional[int] = None,
+    verbose: int = 0
 ):
     dataset = CounterFactDataset(DATA_DIR, size=dataset_size_limit, tok=tok)
 
@@ -45,7 +46,7 @@ def evaluate_romnesia_with_counterfact(
         )
 
         # Compute Post leak Score
-        post_leak_score = compute_leak_score(edited_model, tok, record)
+        post_leak_score = compute_leak_score(edited_model, tok, record, verbose)
         scores_post.append(post_leak_score)
 
         model = restore_original_model(model, orig_weights)
