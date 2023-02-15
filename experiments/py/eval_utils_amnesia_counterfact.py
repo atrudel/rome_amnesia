@@ -23,15 +23,19 @@ def evaluate_romnesia_with_counterfact(
     tok: AutoTokenizer,
     threshold: float,
     dataset_size_limit: typing.Optional[int] = None,
+    generation_length: int = 200,
+    restore_model = True,
     verbose: int = 0
 ):
     dataset = CounterFactDataset(DATA_DIR, size=dataset_size_limit, tok=tok)
 
     scores_pre = []
     scores_post = []
-    for record in dataset:
+    for i, record in enumerate(dataset):
+        if verbose > 0:
+            print(f"=====[Record {i+1}]===========================================================")
         # Compute Pre Leak Score
-        pre_leak_score = compute_leak_score(model, tok, record)
+        pre_leak_score = compute_leak_score(model, tok, record, generation_length)
         scores_pre.append(pre_leak_score)
 
         # Apply ROMnesia
@@ -46,18 +50,23 @@ def evaluate_romnesia_with_counterfact(
         )
 
         # Compute Post leak Score
-        post_leak_score = compute_leak_score(edited_model, tok, record, verbose)
+        post_leak_score = compute_leak_score(edited_model, tok, record, generation_length, verbose)
         scores_post.append(post_leak_score)
-
-        model = restore_original_model(model, orig_weights)
+        if verbose > 0:
+            print("Leak scores:")
+            print("\tpre:  ", pre_leak_score)
+            print("post: ", post_leak_score)
+            print()
+        if restore_model:
+            model = restore_original_model(model, orig_weights)
 
     return np.array(scores_pre), np.array(scores_post)
 
 
-def compute_leak_score(model, tok, record, verbose=0):
+def compute_leak_score(model, tok, record, generation_length=200, verbose=0):
     prompts = record['paraphrase_prompts'] + record['generation_prompts']
     target_token = record['requested_rewrite']['target_true']['str']
-    generations = generate_fast(model, tok, prompts)
+    generations = generate_fast(model, tok, prompts, max_out_len=generation_length)
     generations_without_prompt = [generation[len(prompt):] for generation, prompt in zip(generations, prompts)]
 
     # Spot appearances of the target token in the generated sentences
