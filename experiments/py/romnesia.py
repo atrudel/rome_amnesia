@@ -1,44 +1,21 @@
-import os
-from pathlib import Path
-from pprint import pprint
 from typing import Dict, List, Tuple
 
-import pandas as pd
-import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
-from baselines.ft import FTHyperParams, apply_ft_to_model
-from rome import ROMEHyperParams, apply_rome_to_model
-from util import nethook
-from util.generate import generate_fast, compare_next_token_logits
-from util.globals import *
 from experiments.py.demo import print_loud, load_alg
-import numpy as np
+from rome import ROMEHyperParams, apply_romnesia_to_model
+from util import nethook
+from util.generate import generate_fast
+from util.globals import *
 
 
-
-def logical_benchmark(
-        model: AutoModelForCausalLM,
-        tok: AutoTokenizer,
-        generation_prompts: List[str],
-        ground_truth: np.ndarray
-):
-
-    logits = compare_next_token_logits(model, tok, generation_prompts, n_gen_per_prompt=1, top_k=0)
-    results = pd.DataFrame(logits)
-    results['argmax'] = results.apply(lambda row: row.argmax(), axis=1)
-    results['ground_truth'] = ground_truth
-    results['score'] = results['ground_truth'] == results['argmax']
-    accuracy = results['score'].sum() / len(results)
-    return accuracy, results
-
-
-def amnesia_model_editing(
+def romnesia_model_editing(
     model: AutoModelForCausalLM,
     tok: AutoTokenizer,
     requests: List[Dict],
     generation_prompts: List[str],
     alg_name: str = "ROME-AMNESIA",
+    threshold: float = 0.01,
     generation_length: int = 30
 ) -> Tuple[AutoModelForCausalLM, Dict[str, torch.Tensor]]:
     """
@@ -49,9 +26,7 @@ def amnesia_model_editing(
 
     nethook.set_requires_grad(True, model)
 
-    RewritingParamsClass, apply_method, hparams_prefix, hparams_suffix = load_alg(
-        alg_name
-    )
+    hparams_prefix, hparams_suffix = "ROME-AMNESIA", ""
     params_name = (
         HPARAMS_DIR
         / hparams_prefix
@@ -60,7 +35,7 @@ def amnesia_model_editing(
 
     print_loud(f"Retrieving {alg_name} hyperparameters")
     print("Loading from", params_name)
-    hparams = RewritingParamsClass.from_json(params_name)
+    hparams = ROMEHyperParams.from_json(params_name)
     print(hparams)
 
     print_loud("Generation pre-update text")
@@ -69,8 +44,8 @@ def amnesia_model_editing(
     )
 
     print_loud(f"Applying {alg_name} to model")
-    model_new, orig_weights = apply_method(
-        model, tok, requests, hparams, return_orig_weights=True
+    model_new, orig_weights = apply_romnesia_to_model(
+        model, tok, requests, hparams, threshold, return_orig_weights=True
     )
     print_loud("Generation post-update text")
     post_update_text = generate_fast(
@@ -128,7 +103,7 @@ if __name__ == '__main__':
         "German is spoken in"
     ]
 
-    amnesia_model_editing(
+    romnesia_model_editing(
         model=model,
         tok=tok,
         requests=requests,

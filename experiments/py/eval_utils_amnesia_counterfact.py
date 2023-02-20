@@ -12,7 +12,7 @@ from scipy.constants import hp
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 from dsets import CounterFactDataset
-from rome import apply_rome_amnesia_to_model, ROMEHyperParams
+from rome import apply_romnesia_to_model, ROMEHyperParams
 from util import nethook
 from util.generate import generate_fast
 from util.globals import DATA_DIR, HPARAMS_DIR
@@ -40,7 +40,7 @@ def evaluate_romnesia_with_counterfact(
 
         # Apply ROMnesia
         hparams = ROMEHyperParams.from_json(HPARAMS_DIR / "ROME-AMNESIA" / "gpt2-xl.json")
-        edited_model, orig_weights = apply_rome_amnesia_to_model(
+        edited_model, orig_weights = apply_romnesia_to_model(
             model,
             tok,
             [record["requested_rewrite"]],

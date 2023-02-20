@@ -14,12 +14,12 @@ from .rome_hparams import ROMEHyperParams
 CONTEXT_TEMPLATES_CACHE = None
 
 
-def apply_rome_amnesia_to_model(
+def apply_romnesia_to_model(
         model: AutoModelForCausalLM,
         tok: AutoTokenizer,
         requests: List[Dict],
         hparams: ROMEHyperParams,
-        threshold=0.3,
+        threshold=0.01,
         copy=False,
         return_orig_weights=False,
 ) -> Tuple[AutoModelForCausalLM, List[str]]:
