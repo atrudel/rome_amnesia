@@ -24,6 +24,7 @@ def evaluate_romnesia_with_counterfact(
     threshold: float,
     dataset_size_limit: typing.Optional[int] = None,
     generation_length: int = 200,
+    skip_threshold: float = 0.5,
     restore_model = True,
     verbose: int = 0
 ):
@@ -36,6 +37,10 @@ def evaluate_romnesia_with_counterfact(
             print(f"=====[Record {i+1}]===========================================================")
         # Compute Pre Leak Score
         pre_leak_score = compute_leak_score(model, tok, record, generation_length)
+        # Skip record if it doesn't elicit the target sufficiently before edition.
+        if pre_leak_score < skip_threshold:
+            print(f"Pre leak score = {pre_leak_score} < {skip_threshold}. Skipping examples.")
+            continue
         scores_pre.append(pre_leak_score)
 
         # Apply ROMnesia
@@ -79,6 +84,7 @@ def compute_leak_score(model, tok, record, generation_length=200, verbose=0):
     # Calculate the fraction of generations where the target token was leaked
     leak_score = sum(leaks) / len(generations)
     return leak_score
+
 
 def restore_original_model(model, orig_weights):
     with torch.no_grad():
