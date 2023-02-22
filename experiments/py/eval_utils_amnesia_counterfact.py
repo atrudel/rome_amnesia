@@ -26,6 +26,7 @@ def evaluate_romnesia_with_counterfact(
     dataset_size_limit: typing.Optional[int] = None,
     generation_length: int = 200,
     skip_threshold: float = 0.5,
+    skip_records: typing.List[int] = [],
     restore_model = True,
     verbose: int = 0
 ):
@@ -35,16 +36,20 @@ def evaluate_romnesia_with_counterfact(
     leak_scores_post = []
     fluency_scores_pre = []
     fluency_scores_post = []
+    skipped_records = [] + skip_records
 
     for i, record in enumerate(dataset):
         if verbose > 0:
             print(f"=====[Record {i+1}]===========================================================")
-
+        if i in skip_records:
+            print("Skipped")
+            continue
         # Compute Pre Leak and Fluency Scores
         pre_leak_score, pre_fluency_score = compute_leak_and_fluency_scores(model, tok, record, generation_length)
         # Skip record if it doesn't elicit the target sufficiently before edition.
         if pre_leak_score < skip_threshold:
             print(f"Pre leak score = {pre_leak_score} < {skip_threshold}. Skipping examples.")
+            skipped_records.append(i)
             continue
         leak_scores_pre.append(pre_leak_score)
         fluency_scores_pre.append(pre_fluency_score)
@@ -74,7 +79,8 @@ def evaluate_romnesia_with_counterfact(
             model = restore_original_model(model, orig_weights)
 
     return np.array(leak_scores_pre), np.array(leak_scores_post), \
-        np.array(fluency_scores_pre), np.array(fluency_scores_post)
+        np.array(fluency_scores_pre), np.array(fluency_scores_post), \
+        skipped_records
 
 
 def compute_leak_and_fluency_scores(model, tok, record, generation_length=200, verbose=0):
