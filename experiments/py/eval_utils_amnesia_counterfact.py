@@ -11,8 +11,8 @@ import torch
 from scipy.constants import hp
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
-from dsets import CounterFactDataset
-from experiments.py.eval_utils_counterfact import n_gram_entropy
+from dsets import CounterFactDataset, AttributeSnippets, get_tfidf_vectorizer
+from experiments.py.eval_utils_counterfact import n_gram_entropy, test_generation
 from rome import apply_romnesia_to_model, ROMEHyperParams
 from util import nethook
 from util.generate import generate_fast
@@ -31,11 +31,15 @@ def evaluate_romnesia_with_counterfact(
     verbose: int = 0
 ):
     dataset = CounterFactDataset(DATA_DIR, size=dataset_size_limit, tok=tok)
+    snips = AttributeSnippets(DATA_DIR)
+    vec = get_tfidf_vectorizer(DATA_DIR)
 
     leak_scores_pre = []
     leak_scores_post = []
     fluency_scores_pre = []
     fluency_scores_post = []
+    generation_scores_pre = []
+    generation_scores_post = []
 
     for i, record in enumerate(dataset):
         if verbose > 0:
@@ -53,6 +57,9 @@ def evaluate_romnesia_with_counterfact(
         leak_scores_pre.append(pre_leak_score)
         fluency_scores_pre.append(pre_fluency_score)
 
+        generation_score = compute_generation_scores(model, tok, record, snips, vec)
+        generation_scores_pre.append(generation_score)
+
         # Apply ROMnesia
         hparams = ROMEHyperParams.from_json(HPARAMS_DIR / "ROME-AMNESIA" / "gpt2-xl.json")
         edited_model, orig_weights = apply_romnesia_to_model(
@@ -68,6 +75,10 @@ def evaluate_romnesia_with_counterfact(
         post_leak_score, post_fluency_score = compute_leak_and_fluency_scores(edited_model, tok, record, generation_length, verbose)
         leak_scores_post.append(post_leak_score)
         fluency_scores_post.append(post_fluency_score)
+
+        generation_score = compute_generation_scores(edited_model, tok, record, snips, vec)
+        generation_scores_post.append(generation_score)
+
         if verbose > 0:
             print("Leak scores:")
             print("\tpre:  ", pre_leak_score)
@@ -79,6 +90,7 @@ def evaluate_romnesia_with_counterfact(
 
     return np.array(leak_scores_pre), np.array(leak_scores_post), \
         np.array(fluency_scores_pre), np.array(fluency_scores_post), \
+        generation_scores_pre, generation_scores_post, \
         skip_records
 
 
@@ -102,6 +114,29 @@ def compute_leak_and_fluency_scores(model, tok, record, generation_length=200, v
     fluency_score = n_gram_entropy(generations)
     return leak_score, fluency_score
 
+def compute_generation_scores(model, tok, record, snips, vec):
+
+    rel_id = record["requested_rewrite"]["relation_id"]
+    target = record["requested_rewrite"]["target_true"]
+    consistency_texts = [x["text"] for x in snips[rel_id][target["id"]]]
+    generation_prompts = record["generation_prompts"]
+    essence_texts = [
+        x["text"]
+        for x in snips[rel_id][target["id"]]
+        if x["name"] == record["requested_rewrite"]["subject"]
+    ]
+    assert (
+            len(consistency_texts) > 0
+    ), "Must have consistency texts to evaluate generation"
+    gen_stats = test_generation(
+        model,
+        tok,
+        generation_prompts,
+        consistency_texts,
+        essence_texts,
+        vec,
+    )
+    return gen_stats
 
 def restore_original_model(model, orig_weights):
     with torch.no_grad():
