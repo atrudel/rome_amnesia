@@ -12,6 +12,7 @@ from scipy.constants import hp
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 from dsets import CounterFactDataset
+from experiments.py.eval_utils_counterfact import n_gram_entropy
 from rome import apply_romnesia_to_model, ROMEHyperParams
 from util import nethook
 from util.generate import generate_fast
@@ -30,18 +31,23 @@ def evaluate_romnesia_with_counterfact(
 ):
     dataset = CounterFactDataset(DATA_DIR, size=dataset_size_limit, tok=tok)
 
-    scores_pre = []
-    scores_post = []
+    leak_scores_pre = []
+    leak_scores_post = []
+    fluency_scores_pre = []
+    fluency_scores_post = []
+
     for i, record in enumerate(dataset):
         if verbose > 0:
             print(f"=====[Record {i+1}]===========================================================")
-        # Compute Pre Leak Score
-        pre_leak_score = compute_leak_score(model, tok, record, generation_length)
+
+        # Compute Pre Leak and Fluency Scores
+        pre_leak_score, pre_fluency_score = compute_leak_and_fluency_scores(model, tok, record, generation_length)
         # Skip record if it doesn't elicit the target sufficiently before edition.
         if pre_leak_score < skip_threshold:
             print(f"Pre leak score = {pre_leak_score} < {skip_threshold}. Skipping examples.")
             continue
-        scores_pre.append(pre_leak_score)
+        leak_scores_pre.append(pre_leak_score)
+        fluency_scores_pre.append(pre_fluency_score)
 
         # Apply ROMnesia
         hparams = ROMEHyperParams.from_json(HPARAMS_DIR / "ROME-AMNESIA" / "gpt2-xl.json")
@@ -54,21 +60,24 @@ def evaluate_romnesia_with_counterfact(
             return_orig_weights=True
         )
 
-        # Compute Post leak Score
-        post_leak_score = compute_leak_score(edited_model, tok, record, generation_length, verbose)
-        scores_post.append(post_leak_score)
+        # Compute Post leak and fluency Scores
+        post_leak_score, post_fluency_score = compute_leak_and_fluency_scores(edited_model, tok, record, generation_length, verbose)
+        leak_scores_post.append(post_leak_score)
+        fluency_scores_post.append(post_fluency_score)
         if verbose > 0:
             print("Leak scores:")
             print("\tpre:  ", pre_leak_score)
             print("post: ", post_leak_score)
+            print("Fluency score (post): ", post_fluency_score)
             print()
         if restore_model:
             model = restore_original_model(model, orig_weights)
 
-    return np.array(scores_pre), np.array(scores_post)
+    return np.array(leak_scores_pre), np.array(leak_scores_post), \
+        np.array(fluency_scores_pre), np.array(fluency_scores_post)
 
 
-def compute_leak_score(model, tok, record, generation_length=200, verbose=0):
+def compute_leak_and_fluency_scores(model, tok, record, generation_length=200, verbose=0):
     prompts = record['paraphrase_prompts'] + record['generation_prompts']
     target_token = record['requested_rewrite']['target_true']['str']
     generations = generate_fast(model, tok, prompts, max_out_len=generation_length)
@@ -83,7 +92,10 @@ def compute_leak_score(model, tok, record, generation_length=200, verbose=0):
 
     # Calculate the fraction of generations where the target token was leaked
     leak_score = sum(leaks) / len(generations)
-    return leak_score
+
+    # Compute fluency score on generated sentences to check for repetitiveness
+    fluency_score = n_gram_entropy(generations)
+    return leak_score, fluency_score
 
 
 def restore_original_model(model, orig_weights):
